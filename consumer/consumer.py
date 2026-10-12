@@ -21,15 +21,16 @@ from kafka import KafkaConsumer, KafkaProducer
 from kafka.errors import NoBrokersAvailable
 
 # Local imports
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
+from model.predict import SentimentPredictor
 try:
-    from model.predict import SentimentPredictor
     from consumer.hdfs_writer import HDFSWriter
-    from app.metrics import SentimentMetricsManager
-except ImportError:
-    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    from model.predict import SentimentPredictor
-    from consumer.hdfs_writer import HDFSWriter
-    from app.metrics import SentimentMetricsManager
+except (ImportError, ModuleNotFoundError):
+    from hdfs_writer import HDFSWriter
+from app.metrics import SentimentMetricsManager
 
 logging.basicConfig(
     level=logging.INFO,

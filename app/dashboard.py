@@ -282,8 +282,8 @@ with tab_overview:
         timeline_records = data.get("timeline", [])
         if timeline_records:
             t_df = pd.DataFrame(timeline_records)
-            t_df["timestamp"] = pd.to_datetime(t_df["timestamp"])
-            t_df = t_df.sort_values("timestamp")
+            t_df["timestamp"] = pd.to_datetime(t_df["timestamp"], format="ISO8601", errors="coerce")
+            t_df = t_df.dropna(subset=["timestamp"]).sort_values("timestamp")
             st.line_chart(t_df.set_index("timestamp")[["sentiment_score"]])
         else:
             st.info("Waiting for incoming streaming messages...")

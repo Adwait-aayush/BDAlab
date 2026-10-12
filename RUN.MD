@@ -1,104 +1,120 @@
 # 🚀 Quick Run Guide (For Project Review / Presentation)
 
-This document provides a simple, step-by-step guide to run and demonstrate the **Movie Review Sentiment Classification Pipeline** during your project review or viva.
+This document provides a simple, foolproof step-by-step guide to run and demonstrate the **Movie Review Sentiment Analytics Pipeline** during your lab review, viva, or project presentation.
+
+> 📘 **For in-depth explanations, architecture diagrams, and viva answers, see [FLOW.MD](FLOW.MD).**
 
 ---
 
 ## ⚡ Option 1: Run with Docker (Recommended for Review)
 
 ### Step 1: Ensure Docker Desktop is Running
-Make sure Docker Desktop is open and running on your system.
+Open Docker Desktop and make sure the engine is active (green indicator in the bottom-left corner).
 
-### Step 2: Open Terminal & Run One Command
-Open your terminal (PowerShell, Command Prompt, or bash) in the project folder and run:
+### Step 2: Start All Services
+Open your terminal (PowerShell, CMD, or bash) in the project folder and run:
 
 ```bash
-docker compose up --build
+docker compose up -d
 ```
+*(If running for the first time on a new machine, use `docker compose up --build -d`).*
 
-> **What happens automatically:**
-> 1. Starts **Kafka** (message streaming broker).
-> 2. Starts **Hadoop HDFS NameNode & DataNode** (distributed big data storage).
-> 3. Trains the **TF-IDF + Logistic Regression** machine learning model.
-> 4. Starts the **Consumer** (classifies reviews & saves to HDFS).
-> 5. Starts the **Producer** (streams reviews into Kafka).
-> 6. Launches the **Streamlit Dashboard**.
+> **What happens automatically in background:**
+> 1. Starts **Apache Kafka 3.7** (KRaft mode message streaming broker).
+> 2. Starts **Hadoop HDFS NameNode & DataNode** (distributed cluster storage).
+> 3. Executes `init-setup`: creates Kafka topics & trains the **TF-IDF + Logistic Regression** model.
+> 4. Starts the **Consumer**: ingests streams, predicts sentiment, and writes to HDFS.
+> 5. Starts the **Producer**: continuously streams realistic movie review records.
+> 6. Launches the **Streamlit Analytics Dashboard**.
 
 ---
 
 ## 🖥️ What to Open & Demonstrate to Reviewers
 
-### 1. The Interactive Dashboard
-Open your web browser and go to:
-👉 **[http://localhost:8501](http://localhost:8501)**
+> ⚠️ **Important URL Tip for Windows**: Always use `http://127.0.0.1` rather than `localhost` to avoid Windows IPv6 resolution drops (`ERR_EMPTY_RESPONSE`).
 
-**What to show:**
-- **Top KPIs**: Total reviews processed, positive %, negative %, and average sentiment score.
-- **Per-Movie Breakdown Tab**: Select movies like *Inception*, *The Godfather*, or *Parasite* to view movie-specific statistics.
-- **Live Scored Reviews Tab**: Shows reviews as they arrive through Kafka with model predictions and sentiment scores.
+### 1. The Interactive Dashboard
+Open your web browser and navigate to:
+👉 **[http://127.0.0.1:8501](http://127.0.0.1:8501)**
+
+**What to show the evaluator:**
+- **Live KPIs**: Total reviews processed, positive %, negative %, and average sentiment score updating live.
+- **Sentiment Timeline**: Real-time line chart showing sentiment trends as reviews are ingested.
+- **Per-Movie Breakdown Tab**: Select movies like *Inception*, *The Godfather*, or *Interstellar* to inspect specific metrics.
+- **Live Scored Reviews Tab**: Scrollable stream of incoming reviews with model predictions and probabilities.
 - **ML Model Metrics Tab**: Displays model accuracy (~88%), confusion matrix, precision, recall, and F1-score.
-- **Live Review Sandbox**: Type your own review (e.g., *"This movie was brilliant and breathtaking!"*) and click **Classify Sentiment** to show live prediction on the spot!
+- **Interactive Review Sandbox**: Type a custom review on the spot (e.g., *"An absolute cinematic masterpiece with unforgettable music!"*) and click **Classify Sentiment** to demonstrate live real-time inference.
 
 ### 2. The Hadoop HDFS Cluster (Big Data Proof)
 Open another browser tab:
-👉 **[http://localhost:9870](http://localhost:9870)**
+👉 **[http://127.0.0.1:9870](http://127.0.0.1:9870)**
 
-**What to show:**
-- Click on **Utilities** ➔ **Browse the file system** in the top menu.
-- Navigate to:
-  - `/movie-sentiment/raw/` ➔ Raw incoming review JSONL files.
-  - `/movie-sentiment/processed/` ➔ Scored predictions with probabilities.
-  - `/movie-sentiment/metrics/` ➔ Aggregated movie summary statistics (`summary.json`).
+**What to show the evaluator:**
+- **Overview**: Shows cluster health, 1 active DataNode, and configured capacity.
+- **Live File Explorer**:
+  1. Click on **Utilities** ➔ **Browse the file system** in the top navigation bar.
+  2. Navigate into `/movie-sentiment/`:
+     - `/movie-sentiment/raw/` ➔ Raw incoming review JSONL files.
+     - `/movie-sentiment/processed/` ➔ Scored predictions with sentiment scores.
+     - `/movie-sentiment/metrics/` ➔ Aggregated movie summary statistics (`summary.json`).
 
 ---
 
-## 💻 Handy Terminal Commands During the Review
+## 💻 Handy Terminal Commands During Evaluation
 
-Open a second terminal window to demonstrate live system activity:
+Keep a terminal open to demonstrate live activity:
 
-### Show Running Containers
+### 1. Show All Running Containers
 ```bash
 docker compose ps
 ```
+*(All 6 containers should display as `Up` / `Healthy`).*
 
-### Show Live Review Scoring in Consumer
+### 2. Show Live Review Scoring in Consumer
 ```bash
-docker compose logs -f consumer
+docker compose logs --tail 15 -f consumer
 ```
-*(Shows reviews being scored in real-time as positive/negative).*
+*(Shows real-time inference: review ID, movie title, sentiment score, and HDFS batch flushes).*
 
-### Show Kafka Messages Being Produced
+### 3. Show Kafka Messages Being Streamed
 ```bash
-docker compose logs -f producer
+docker compose logs --tail 15 -f producer
 ```
+*(Shows partitions and offsets of reviews being published to Kafka).*
 
-### How to Stop the Project After the Review
+### 4. Stop All Services After Presentation
 ```bash
 docker compose down
 ```
 
 ---
 
-## 🛠️ Option 2: Run Without Docker (Local Fallback)
+## 🔧 Troubleshooting Tips (Lab Computers)
 
-If Docker is ever unavailable on the evaluation computer, you can run locally:
+### 1. "Empty reply from server" or "localhost didn't send any data"
+* Cause: Windows resolves `localhost` to IPv6 (`::1`).
+* Fix: Always use explicit IPv4: **[http://127.0.0.1:8501](http://127.0.0.1:8501)**.
 
-```bash
-# 1. Install dependencies
-pip install -r requirements.txt
-
-# 2. Train the model
-python model/train.py
-
-# 3. Run smoke test to verify all components
-python scripts/smoke_test.py
-
-# 4. Launch the dashboard directly
-streamlit run app/dashboard.py
-```
-Open **[http://localhost:8501](http://localhost:8501)** in your browser.
+### 2. `httpReadSeeker ... EOF` error during image pull
+* Cause: Docker Desktop containerd snapshotter bug on unstable or IPv6-restricted networks.
+* Fix:
+  1. In Docker Desktop, go to **Settings** ➔ **Docker Engine**.
+  2. Add:
+     ```json
+     {
+       "dns": ["8.8.8.8", "1.1.1.1"]
+     }
+     ```
+  3. Turn off *"Use containerd for storing images"* if enabled.
+  4. Pull base images individually:
+     ```bash
+     docker pull apache/kafka:3.7.0
+     docker pull bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+     docker pull bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+     ```
 
 ---
 
-## 🎯 30-Second Project Explanation Pitch for Evaluators
-> *"In this project, we built a Big Data streaming and analytics pipeline. Incoming movie reviews are published as JSON messages to **Apache Kafka**. A streaming Python consumer processes each review through an NLP pipeline using **TF-IDF vectorization and Logistic Regression** to compute a sentiment score between -1 and +1. Both raw reviews and scored predictions are persisted in **Hadoop HDFS** via WebHDFS for distributed storage. Finally, movie-level statistics are dynamically aggregated and visualized on a real-time **Streamlit dashboard**."*
+## 🎯 30-Second Summary for Evaluators
+
+> *"In this project, we built an end-to-end Big Data streaming and analytics pipeline. Incoming movie reviews are published as JSON events to **Apache Kafka (KRaft mode)**. A streaming consumer processes each review through an NLP pipeline using **TF-IDF vectorization and Logistic Regression** to score sentiment. Both raw reviews and scored predictions are persisted in **Hadoop HDFS** for long-term Data Lake storage. Finally, movie statistics are aggregated dynamically and presented on an interactive **Streamlit dashboard**."*
