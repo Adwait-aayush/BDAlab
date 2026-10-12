@@ -1,0 +1,33 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Environments
+.env
+.venv/
+env/
+venv/
+ENV/
+
+# Data and Artifacts
+data/*.csv
+!data/sample_imdb.csv
+!data/README.md
+artifacts/*.joblib
+!artifacts/.gitkeep
+logs/
+
+# Docker volumes
+docker-data/
+hdfs-data/
+kafka-data/
+
+# OS and IDE files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

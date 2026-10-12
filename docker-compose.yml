@@ -1,0 +1,189 @@
+version: "3.8"
+
+networks:
+  bigdata-net:
+    driver: bridge
+
+volumes:
+  kafka-data:
+  hadoop-namenode-data:
+  hadoop-datanode-data:
+  app-artifacts:
+
+services:
+  # ==============================================================
+  # 1. Apache Kafka Broker (KRaft Mode, No ZooKeeper Required)
+  # ==============================================================
+  kafka:
+    image: apache/kafka:3.7.0
+    container_name: kafka
+    hostname: kafka
+    networks:
+      - bigdata-net
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,EXTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:29092
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 1
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    volumes:
+      - kafka-data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-broker-api-versions.sh --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==============================================================
+  # 2. Hadoop HDFS NameNode
+  # ==============================================================
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop3.2.1-java8
+    container_name: namenode
+    hostname: namenode
+    networks:
+      - bigdata-net
+    ports:
+      - "9870:9870"
+      - "9000:9000"
+    environment:
+      - CLUSTER_NAME=movie-sentiment-cluster
+      - HDFS_CONF_dfs_webhdfs_enabled=true
+      - HDFS_CONF_dfs_permissions_enabled=false
+      - HDFS_CONF_dfs_replication=1
+    volumes:
+      - hadoop-namenode-data:/hadoop/dfs/name
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9870/webhdfs/v1/?op=LISTSTATUS&user.name=root || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ==============================================================
+  # 3. Hadoop HDFS DataNode
+  # ==============================================================
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop3.2.1-java8
+    container_name: datanode
+    hostname: datanode
+    networks:
+      - bigdata-net
+    ports:
+      - "9864:9864"
+    depends_on:
+      - namenode
+    environment:
+      - SERVICE_PRECONDITION=namenode:9870
+      - HDFS_CONF_dfs_webhdfs_enabled=true
+      - HDFS_CONF_dfs_permissions_enabled=false
+      - HDFS_CONF_dfs_replication=1
+    volumes:
+      - hadoop-datanode-data:/hadoop/dfs/data
+
+  # ==============================================================
+  # 4. Initialization & Setup Service (One-shot)
+  # ==============================================================
+  init-setup:
+    build: .
+    container_name: init-setup
+    networks:
+      - bigdata-net
+    depends_on:
+      kafka:
+        condition: service_healthy
+      namenode:
+        condition: service_healthy
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - WEBHDFS_URL=http://namenode:9870/webhdfs/v1
+      - MODEL_PATH=artifacts/sentiment_model.joblib
+      - TRAIN_DATA_PATH=data/sample_imdb.csv
+    volumes:
+      - app-artifacts:/workspace/artifacts
+    command: >
+      bash -c "
+        python scripts/wait_for_services.py --kafka kafka:9092 --webhdfs http://namenode:9870/webhdfs/v1 &&
+        python scripts/create_topics.py --bootstrap-servers kafka:9092 &&
+        python model/train.py --data data/sample_imdb.csv --output artifacts/sentiment_model.joblib &&
+        echo 'Initialization completed successfully!'
+      "
+
+  # ==============================================================
+  # 5. Sentiment Consumer & HDFS Persistence Engine
+  # ==============================================================
+  consumer:
+    build: .
+    container_name: consumer
+    networks:
+      - bigdata-net
+    depends_on:
+      init-setup:
+        condition: service_completed_successfully
+      datanode:
+        condition: service_started
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_INPUT_TOPIC=movie-reviews
+      - KAFKA_OUTPUT_TOPIC=movie-sentiment-results
+      - KAFKA_CONSUMER_GROUP=movie-sentiment-group
+      - WEBHDFS_URL=http://namenode:9870/webhdfs/v1
+      - HDFS_USER=root
+      - MODEL_PATH=artifacts/sentiment_model.joblib
+      - METRICS_DATA_PATH=artifacts/live_metrics.json
+    volumes:
+      - app-artifacts:/workspace/artifacts
+    restart: unless-stopped
+    command: ["python", "consumer/consumer.py"]
+
+  # ==============================================================
+  # 6. Movie Review Kafka Producer
+  # ==============================================================
+  producer:
+    build: .
+    container_name: producer
+    networks:
+      - bigdata-net
+    depends_on:
+      consumer:
+        condition: service_started
+    environment:
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - KAFKA_INPUT_TOPIC=movie-reviews
+      - PRODUCER_MODE=stream
+      - PRODUCER_STREAM_DELAY_SECONDS=2.0
+      - PRODUCER_BATCH_SIZE=50
+      - SAMPLE_REVIEWS_FILE=producer/sample_reviews.jsonl
+    restart: unless-stopped
+    command: ["python", "producer/producer.py"]
+
+  # ==============================================================
+  # 7. Interactive Streamlit Analytics Dashboard
+  # ==============================================================
+  dashboard:
+    build: .
+    container_name: dashboard
+    networks:
+      - bigdata-net
+    ports:
+      - "8501:8501"
+    depends_on:
+      - consumer
+    environment:
+      - METRICS_DATA_PATH=artifacts/live_metrics.json
+      - MODEL_PATH=artifacts/sentiment_model.joblib
+      - WEBHDFS_URL=http://namenode:9870/webhdfs/v1
+    volumes:
+      - app-artifacts:/workspace/artifacts
+    restart: unless-stopped
+    command: ["streamlit", "run", "app/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
