@@ -7,7 +7,7 @@ Calculates positive_probability and maps sentiment_score to [-1.0, 1.0].
 import os
 import sys
 import logging
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List
 
 import joblib
 
@@ -80,6 +80,46 @@ class SentimentPredictor:
             "predicted_sentiment": predicted_sentiment,
             "positive_probability": round(positive_prob, 4),
             "sentiment_score": round(sentiment_score, 4),
+        }
+
+    def explain_one(self, review_text: str, limit: int = 8) -> Dict[str, Any]:
+        """Return the real sparse TF-IDF calculation used for one prediction."""
+        if not self.pipeline:
+            raise RuntimeError("Pipeline is not loaded.")
+        if limit < 1 or limit > 30:
+            raise ValueError("Explanation limit must be between 1 and 30.")
+
+        text = review_text if review_text else ""
+        vectorizer = self.pipeline.named_steps.get("tfidf")
+        classifier = self.pipeline.named_steps.get("clf")
+        if vectorizer is None or classifier is None:
+            raise RuntimeError("Loaded pipeline does not contain tfidf and clf steps.")
+
+        features = vectorizer.transform([text])
+        names = vectorizer.get_feature_names_out()
+        coefficients = classifier.coef_[0]
+        nonzero_indices = features.indices
+        calculations = []
+        for index in nonzero_indices:
+            tfidf_value = float(features[0, index])
+            coefficient = float(coefficients[index])
+            calculations.append({
+                "feature": str(names[index]),
+                "tfidf": round(tfidf_value, 6),
+                "weight": round(coefficient, 6),
+                "contribution": round(tfidf_value * coefficient, 6),
+            })
+        calculations.sort(key=lambda item: abs(item["contribution"]), reverse=True)
+
+        decision = float(classifier.decision_function(features)[0])
+        positive_probability = float(self.pipeline.predict_proba([text])[0][1])
+        return {
+            **self.predict_one(text),
+            "bias": round(float(classifier.intercept_[0]), 6),
+            "decision_value": round(decision, 6),
+            "sigmoid_probability": round(positive_probability, 6),
+            "feature_count": int(len(nonzero_indices)),
+            "calculations": calculations[:limit],
         }
 
     def predict_batch(self, reviews: List[str]) -> List[Dict[str, Any]]:

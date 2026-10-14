@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#07111f">
+  <title>Sentinel // Streaming Control Room</title>
+  <link rel="stylesheet" href="/web/styles.css">
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <a class="brand" href="/">
+        <span class="brand-mark"><i></i><i></i><i></i></span>
+        <span><strong>SENTINEL</strong><small>STREAMING CONTROL ROOM</small></span>
+      </a>
+      <div class="topbar-meta">
+        <a class="namenode-link" href="http://127.0.0.1:9870/explorer.html#/movie-sentiment" target="_blank" rel="noreferrer"><span class="namenode-dot"></span> REAL HDFS ↗</a>
+        <span class="live-dot"></span><span id="last-updated">Connecting to telemetry…</span>
+        <button id="refresh-now" class="icon-button" title="Refresh telemetry" aria-label="Refresh telemetry">↻</button>
+      </div>
+    </header>
+
+    <main>
+      <section class="hero">
+        <div>
+          <p class="eyebrow">REAL-TIME SENTIMENT PIPELINE / 01</p>
+          <h1>Movie sentiment,<br><em>in motion.</em></h1>
+          <p class="hero-copy">Watch every review travel from Kafka ingestion through the production predictor to its HDFS landing zone.</p>
+        </div>
+        <div class="hero-status">
+          <div class="status-ring"><span id="health-score">--</span><small>PIPELINE<br>HEALTH</small></div>
+          <div><span class="badge badge-amber" id="metrics-badge">● SYNCING</span><p id="health-copy">Warming up telemetry</p></div>
+        </div>
+      </section>
+
+      <section id="intro-view" class="intro-view">
+        <div class="flow-heading"><div><p class="eyebrow">THE WHOLE SYSTEM / LIVE MAP</p><h2>Follow one review<br><em>all the way through.</em></h2><p>Read left to right: a review is published to Kafka, scored by the consumer, published as a result, and written to HDFS. Click any stage to open the live proof for that part of the system.</p></div><div class="flow-key"><span><i class="flow-dot cyan"></i>event movement</span><span><i class="flow-dot violet"></i>computation</span><span><i class="flow-dot gold"></i>durable storage</span></div></div>
+        <div class="system-flow" aria-label="Interactive end-to-end data flow">
+          <div class="flow-connection connection-input"><span class="flow-packet packet-one"></span></div>
+          <div class="flow-connection connection-output"><span class="flow-packet packet-two"></span></div>
+          <div class="flow-connection connection-storage"><span class="flow-packet packet-three"></span></div>
+          <button class="flow-node flow-source" data-target="producer-view"><span class="flow-step">01 · GENERATE</span><strong>Review producer</strong><small>Creates the raw JSON event</small><code>review_text · movie_id · created_at</code><b>simulated external source</b></button>
+          <span class="flow-arrow input-arrow">›</span>
+          <button class="flow-node flow-kafka" data-target="kafka-input-view"><span class="flow-step">02 · BUFFER</span><strong>Kafka input</strong><small>Receives and holds incoming reviews</small><code>topic: movie-reviews</code><b id="flow-topic-status">— topics live</b></button>
+          <span class="flow-arrow model-arrow">›</span>
+          <button class="flow-node flow-model" data-target="model-view"><span class="flow-step">03 · PROCESS</span><strong>Consumer + ML model</strong><small>Consumes one event, predicts sentiment, then fans out the result</small><code>TF-IDF → Logistic Regression</code><b id="flow-events-status">— reviews scored</b></button>
+          <div class="flow-branch-label">one scored event<br><b>fan-out</b></div>
+          <button class="flow-node flow-output" data-target="kafka-output-view"><span class="flow-step">04A · STREAM OUTPUT</span><strong>Kafka result topic</strong><small>Publishes the enriched prediction for downstream consumers</small><code>movie-sentiment-results</code><b>sentiment + probability + score</b></button>
+          <button class="flow-node flow-hdfs" data-target="hdfs-view"><span class="flow-step">04B · DURABLE STORAGE</span><strong>HDFS data lake</strong><small>Stores the original review, the model's prediction, and the live summary</small><code>raw input + scored output + metrics</code><b id="flow-files-status">— files visible</b></button>
+        </div>
+        <div class="flow-explanation"><span><b>What is real?</b> Kafka, the model, WebHDFS, and the records shown below.</span><span><b>What is simulated?</b> Only the external movie-review source; the producer stands in for users posting reviews.</span><span class="intro-proof-note">Live evidence · refreshes every 3 seconds</span></div>
+        <section class="try-it panel">
+          <div><p class="eyebrow">TRY THE SAME MODEL</p><h2>Send your own review through inference.</h2><p class="detail-copy">This calls the production predictor directly. It does not publish anything to Kafka or write anything to HDFS.</p></div>
+          <form id="predict-form"><label for="review-input">Review text</label><textarea id="review-input" maxlength="5000" placeholder="A beautifully made film with an unforgettable ending…"></textarea><div class="form-footer"><small><span id="char-count">0</span> / 5,000</small><button type="submit" class="primary-button"><span>Run prediction</span><b>→</b></button></div><div id="predict-result" class="predict-result" aria-live="polite"></div></form>
+        </section>
+      </section>
+
+      <section id="producer-view" class="detail-view panel stage-view">
+        <button class="back-flow" data-back>← Back to flow</button><p class="eyebrow">STAGE 01 / SOURCE</p><h2>How review data is mocked</h2><p class="detail-copy">There is no external movie website connected to this lab. The producer acts like one: it reads seed reviews and continuously generates realistic synthetic review events, then publishes each JSON event to Kafka.</p>
+        <div class="stage-explainer"><div><span>INPUT</span><b>sample_reviews.jsonl</b><small>Seed examples start the stream.</small></div><div class="stage-arrow">→</div><div><span>GENERATOR</span><b>producer.py</b><small>Creates new review IDs, titles, text, and timestamps.</small></div><div class="stage-arrow">→</div><div><span>OUTPUT</span><b>movie-reviews</b><small>Kafka receives the raw event.</small></div></div>
+      </section>
+
+      <section id="kafka-input-view" class="detail-view panel stage-view">
+        <button class="back-flow" data-back>← Back to flow</button><div class="panel-head"><div><p class="eyebrow">STAGE 02 / INPUT STREAM</p><h2>Kafka receives raw reviews</h2></div><span class="mini-chip" id="kafka-detail-status">Checking broker…</span></div>
+        <p class="detail-copy">This view is only the input topic. These are the raw messages before the model sees them.</p>
+        <div class="detail-kpis"><div><span>Broker</span><b id="kafka-bootstrap">—</b></div><div><span>Topic</span><b>movie-reviews</b></div><div><span>Messages</span><b id="kafka-message-count">—</b></div></div>
+        <div class="kafka-proof"><div><span class="proof-live-dot"></span><b>REAL KAFKA EVIDENCE</b><small>This panel is read from the live broker, not sample data. Topic metadata, offsets, counts, and the exact records below come from Kafka.</small></div><code>broker: <b id="kafka-proof-broker">—</b> · topic: movie-reviews · partition: 0</code></div>
+        <div id="kafka-input-list" class="topic-list"><div class="empty-state">Reading input messages…</div></div>
+        <pre id="kafka-message-content" class="file-content kafka-message-content">Select a raw review to inspect it.</pre>
+      </section>
+
+      <section id="model-view" class="detail-view panel">
+        <button class="back-flow" data-back>← Back to flow</button>
+        <div class="panel-head"><div><p class="eyebrow">INFERENCE LAYER</p><h2>How the model is deciding</h2></div><span class="mini-chip" id="model-detail-status">Checking model…</span></div>
+        <p class="detail-copy">The consumer reads each message from <code>movie-reviews</code>, cleans the text, converts words into TF-IDF features, and sends those features into Logistic Regression. The result is a class, probability, and score.</p>
+        <div class="model-live-console">
+          <div class="model-console-head"><span class="console-dot"></span><b>LIVE INFERENCE LOOP</b><span id="model-console-count">waiting for events</span></div>
+          <div class="model-track"><span class="model-packet packet-a"></span><span class="model-packet packet-b"></span><span class="model-packet packet-c"></span><i class="track-stage stage-text">TEXT</i><i class="track-stage stage-vector">TF-IDF</i><i class="track-stage stage-score">SCORE</i></div>
+          <div class="model-console-foot"><span>review text enters</span><span>words become weighted features</span><span>probability becomes decision</span></div>
+        </div>
+        <div class="weight-lab">
+          <div class="weight-lab-head"><div><p class="eyebrow">WEIGHT LAB / LIVE EXPLANATION</p><h3>How one prediction is built</h3></div><span class="mini-chip violet">LOGISTIC REGRESSION · SIGMOID</span></div>
+          <form id="explain-form" class="explain-form"><label for="explain-input">Run a real calculation on one review</label><div class="explain-input-row"><input id="explain-input" maxlength="5000" placeholder="Try: The acting was brilliant but the ending was boring."><button type="submit" class="secondary-button">Calculate weights →</button></div><small>Uses the same trained artifact as the streaming consumer. No Kafka or HDFS write occurs.</small></form>
+          <div class="neural-lane" aria-label="Animated TF-IDF weights and logistic regression neuron">
+            <div class="neural-layer feature-layer"><span class="layer-label">TF-IDF FEATURES</span><i style="--delay:0s"><span id="explain-feature-1">waiting for input</span> <b id="explain-weight-1">—</b></i><i style="--delay:.35s"><span id="explain-feature-2">—</span> <b id="explain-weight-2">—</b></i><i style="--delay:.7s"><span id="explain-feature-3">—</span> <b id="explain-weight-3">—</b></i><i style="--delay:1.05s"><span id="explain-feature-4">—</span> <b id="explain-weight-4">—</b></i></div>
+            <div class="weight-links" aria-hidden="true"><i style="--delay:0s"></i><i style="--delay:.25s"></i><i style="--delay:.5s"></i><i style="--delay:.75s"></i></div>
+            <div class="neural-layer decision-layer"><span class="layer-label">DECISION UNIT</span><div class="neuron"><span>Σ wx + b</span><b>bias <em id="explain-bias">—</em></b></div></div>
+            <div class="weight-links output-links" aria-hidden="true"><i></i></div>
+            <div class="neural-layer output-layer"><span class="layer-label">OUTPUT</span><i class="output-neuron"><b id="explain-sentiment">WAITING</b><small id="explain-probability">Run a calculation</small></i></div>
+          </div>
+          <div class="weight-lab-note"><span><b>TF-IDF</b> feature value × learned coefficient</span><span><b>bias</b> shifts the decision boundary</span><span><b>decision</b> sigmoid(score) → probability</span><span id="explain-summary" class="weight-note-disclaimer">Waiting for a review calculation</span></div>
+        </div>
+        <div class="detail-kpis"><div><span>Algorithm</span><b>TF-IDF + Logistic Regression</b></div><div><span>Threshold</span><b id="model-threshold">—</b></div><div><span>Accuracy</span><b id="model-detail-accuracy">—</b></div></div>
+        <div id="model-metrics-grid" class="model-metrics-grid"></div>
+      </section>
+
+      <section id="kafka-output-view" class="detail-view panel stage-view">
+        <button class="back-flow" data-back>← Back to flow</button><div class="panel-head"><div><p class="eyebrow">STAGE 04A / OUTPUT STREAM</p><h2>Kafka carries the model's predictions</h2></div><span class="mini-chip" id="output-kafka-status">Checking topic…</span></div>
+        <p class="detail-copy">This is the enriched stream after inference. Every message contains the review identity plus the sentiment prediction, probability, and score.</p>
+        <div class="detail-kpis"><div><span>Topic</span><b>movie-sentiment-results</b></div><div><span>Partitions</span><b id="output-partitions">—</b></div><div><span>Predictions</span><b id="output-message-count">—</b></div></div>
+        <div class="kafka-proof output-proof"><div><span class="proof-live-dot"></span><b>REAL KAFKA RESULT EVIDENCE</b><small>These are enriched records published by the consumer after model inference. Open any event to inspect its exact Kafka payload.</small></div><code>topic: movie-sentiment-results · sentiment · probability · score</code></div>
+        <div id="kafka-output-list" class="topic-list"><div class="empty-state">Reading prediction messages…</div></div>
+        <pre id="kafka-output-content" class="file-content kafka-message-content">Select a scored message to inspect it.</pre>
+      </section>
+
+      <section id="hdfs-view" class="detail-view panel stage-view">
+        <button class="back-flow" data-back>← Back to flow</button>
+        <div class="panel-head"><div><p class="eyebrow">DATA LAKE INSPECTION</p><h2>Browse HDFS from the dashboard</h2></div><span class="mini-chip gold" id="hdfs-detail-status">Checking storage…</span></div>
+        <p class="detail-copy">The consumer fans the processing run into three canonical HDFS files. Choose a file below to see its individual records.</p>
+        <p><a class="external-link" href="http://127.0.0.1:9870/explorer.html#/movie-sentiment" target="_blank" rel="noreferrer">Open the real Hadoop NameNode browser ↗</a></p>
+        <div class="hdfs-branch"><div><span>RAW</span><b>reviews.jsonl</b><small>Original Kafka input, kept for replay.</small></div><div><span>PROCESSED</span><b>scored.jsonl</b><small>Model predictions paired with reviews.</small></div><div><span>METRICS</span><b>summary.json</b><small>Aggregate counts and sentiment trends.</small></div></div>
+        <div class="hdfs-browser"><div id="hdfs-file-list" class="hdfs-file-list"><div class="empty-state">Reading HDFS inventory…</div></div><div><div id="hdfs-record-list" class="record-list"></div><pre id="hdfs-file-content" class="file-content">Select a file to inspect its contents.</pre></div></div>
+      </section>
+
+      <section id="results-view" class="detail-view panel">
+        <div class="panel-head"><div><p class="eyebrow">OUTPUT STREAM</p><h2>Predictions produced by the consumer</h2></div><span class="mini-chip" id="results-detail-count">—</span></div>
+        <p class="detail-copy">This table is driven by the consumer's shared metrics artifact and shows the exact predictions that are also persisted under the HDFS processed zone.</p>
+        <div id="results-table" class="results-table"><div class="empty-state">Waiting for processed records…</div></div>
+      </section>
+
+      <section id="overview-view" class="overview-section kpi-grid" aria-label="Live metrics">
+        <article class="kpi-card accent-cyan"><span class="kpi-label">REVIEWS PROCESSED</span><strong id="total-processed">—</strong><small>events scored end-to-end</small></article>
+        <article class="kpi-card accent-green"><span class="kpi-label">POSITIVE SIGNAL</span><strong id="positive-pct">—</strong><small><b id="positive-count">—</b> positive classifications</small></article>
+        <article class="kpi-card accent-coral"><span class="kpi-label">NEGATIVE SIGNAL</span><strong id="negative-pct">—</strong><small><b id="negative-count">—</b> negative classifications</small></article>
+        <article class="kpi-card accent-violet"><span class="kpi-label">MEAN SENTIMENT</span><strong id="mean-score">—</strong><small>confidence score · −1 to +1</small></article>
+        <article class="kpi-card accent-gold"><span class="kpi-label">MODEL ACCURACY</span><strong id="model-accuracy">—</strong><small>TF-IDF + Logistic Regression</small></article>
+      </section>
+
+      <section class="overview-section section-heading">
+        <div><p class="eyebrow">LIVE DATA PATH</p><h2>Follow the signal</h2></div>
+        <div class="connection-list">
+          <span class="connection"><i class="signal green"></i> Kafka <b id="kafka-status">READY</b></span>
+          <span class="connection"><i class="signal violet"></i> Predictor <b id="predictor-status">READY</b></span>
+          <span class="connection"><i class="signal gold"></i> HDFS <b id="hdfs-status">CHECKING</b></span>
+        </div>
+      </section>
+
+      <section class="overview-section pipeline-card">
+        <div class="pipeline-track"><div class="track-line"></div><div class="track-glow"></div></div>
+        <div class="pipeline-node node-kafka">
+          <div class="node-icon">⌁</div><span class="node-index">01 / INGEST</span><h3>Kafka</h3><p>movie-reviews</p><small>high-throughput event stream</small><span class="node-state"><i class="signal green"></i> LISTENING</span>
+        </div>
+        <div class="pipeline-node node-model">
+          <div class="node-icon">✦</div><span class="node-index">02 / SCORE</span><h3>ML Predictor</h3><p>TF-IDF + LogReg</p><small>probability → sentiment score</small><span class="node-state"><i class="signal violet"></i> INFERENCE READY</span>
+        </div>
+        <div class="pipeline-node node-hdfs">
+          <div class="node-icon">▣</div><span class="node-index">03 / LAND</span><h3>HDFS</h3><p>/movie-sentiment/</p><small>raw · processed · metrics</small><span class="node-state"><i class="signal gold"></i> <span id="hdfs-node-state">MIRROR FALLBACK</span></span>
+        </div>
+        <div class="particles" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span></div>
+      </section>
+
+      <section class="overview-section story-section" aria-labelledby="story-title">
+        <div class="section-heading compact story-heading">
+          <div><p class="eyebrow">THE PROJECT, EXPLAINED</p><h2 id="story-title">One review's journey</h2></div>
+          <span class="source-label">simple view / technical depth</span>
+        </div>
+        <p class="story-intro">A review starts as text, becomes an event, gets an AI decision, and is stored in three useful layers. Follow the glowing packet to see what happens at every step.</p>
+        <div class="journey" role="list">
+          <article class="journey-step capture" role="listitem">
+            <span class="journey-number">01</span><div class="journey-icon">✎</div>
+            <h3>Someone writes a review</h3><p>The producer turns movie feedback into a JSON event.</p>
+            <code>review_text · movie_id · created_at</code><b id="journey-events">— events received</b>
+          </article>
+          <div class="journey-arrow"><i></i><span>event stream</span></div>
+          <article class="journey-step queue" role="listitem">
+            <span class="journey-number">02</span><div class="journey-icon">≋</div>
+            <h3>Kafka holds the traffic</h3><p>A durable queue absorbs bursts so producers and processors do not need to run at the same speed.</p>
+            <code>topic: movie-reviews</code><b>ordered messages</b>
+          </article>
+          <div class="journey-arrow"><i></i><span>one event at a time</span></div>
+          <article class="journey-step intelligence" role="listitem">
+            <span class="journey-number">03</span><div class="journey-icon">✦</div>
+            <h3>The model understands it</h3><p>TF-IDF turns words into numbers; Logistic Regression predicts the sentiment.</p>
+            <code>probability → score −1 to +1</code><b id="journey-classified">— classified</b>
+          </article>
+          <div class="journey-arrow"><i></i><span>fan-out</span></div>
+          <article class="journey-step landing" role="listitem">
+            <span class="journey-number">04</span><div class="journey-icon">▣</div>
+            <h3>HDFS stores the evidence</h3><p>The same processing run writes raw input, scored output, and a summary for reporting.</p>
+            <code>/raw · /processed · /metrics</code><b id="journey-stored">— files visible</b>
+          </article>
+        </div>
+        <div class="journey-legend"><span><i class="legend-dot cyan"></i> moving data</span><span><i class="legend-dot violet"></i> computation</span><span><i class="legend-dot gold"></i> durable storage</span><span class="journey-note">The complexity is underneath; the story stays readable.</span></div>
+      </section>
+
+      <section class="overview-section content-grid">
+        <article class="panel sentiment-panel">
+          <div class="panel-head"><div><p class="eyebrow">SIGNAL MIX</p><h2>Sentiment distribution</h2></div><span class="mini-chip" id="distribution-total">0 events</span></div>
+          <div class="donut-wrap"><div class="donut" id="donut"><div><strong id="donut-label">—</strong><small>positive</small></div></div><div class="legend"><div><i class="legend-dot green"></i><span>Positive</span><b id="legend-positive">—</b></div><div><i class="legend-dot coral"></i><span>Negative</span><b id="legend-negative">—</b></div><div class="legend-total"><span>Total scored</span><b id="legend-total">—</b></div></div></div>
+          <div class="spark-bars" id="spark-bars" aria-label="Recent sentiment timeline"></div>
+        </article>
+
+        <article class="panel timeline-panel">
+          <div class="panel-head"><div><p class="eyebrow">STREAM VELOCITY</p><h2>Recent score movement</h2></div><span class="mini-chip cyan">LIVE / 30 SEC</span></div>
+          <div class="chart" id="timeline-chart"><div class="empty-state">Waiting for scored events…</div></div>
+          <div class="chart-axis"><span>earlier</span><span>latest</span></div>
+        </article>
+      </section>
+
+      <section class="overview-section section-heading compact"><div><p class="eyebrow">STORAGE OBSERVABILITY</p><h2>HDFS landing zones</h2></div><span class="source-label" id="hdfs-source">Source: checking…</span></section>
+      <section class="overview-section zone-grid">
+        <article class="zone-card zone-raw"><div class="zone-top"><span class="zone-icon">◌</span><span class="zone-tag">BRONZE</span></div><h3>Raw reviews</h3><p>/movie-sentiment/raw</p><strong id="raw-count">0</strong><small>files tracked</small><div class="zone-progress"><i></i></div></article>
+        <article class="zone-card zone-processed"><div class="zone-top"><span class="zone-icon">✦</span><span class="zone-tag">SILVER</span></div><h3>Scored predictions</h3><p>/movie-sentiment/processed</p><strong id="processed-count">0</strong><small>files tracked</small><div class="zone-progress"><i></i></div></article>
+        <article class="zone-card zone-metrics"><div class="zone-top"><span class="zone-icon">⌁</span><span class="zone-tag">GOLD</span></div><h3>Live metrics</h3><p>/movie-sentiment/metrics</p><strong id="metrics-count">0</strong><small>files tracked</small><div class="zone-progress"><i></i></div></article>
+        <article class="zone-card storage-total"><span class="kpi-label">STORAGE FOOTPRINT</span><strong id="storage-size">0 B</strong><p>across visible HDFS zones</p><div class="storage-bars"><i></i><i></i><i></i></div></article>
+      </section>
+
+      <section class="overview-section content-grid lower-grid">
+        <article class="panel reviews-panel"><div class="panel-head"><div><p class="eyebrow">LATEST EVENTS</p><h2>Recent scored reviews</h2></div><span class="mini-chip" id="review-count">0 shown</span></div><div class="review-list" id="review-list"><div class="empty-state">Waiting for reviews from Kafka…</div></div></article>
+        <article class="panel writes-panel"><div class="panel-head"><div><p class="eyebrow">PERSISTENCE LOG</p><h2>Recent HDFS writes</h2></div><span class="mini-chip gold" id="file-count">0 files</span></div><div class="write-list" id="write-list"><div class="empty-state">Checking HDFS inventory…</div></div></article>
+      </section>
+
+    </main>
+    <footer><span>SENTINEL / MOVIE SENTIMENT PIPELINE</span><span>Kafka → ML → HDFS <b>·</b> telemetry refreshes every 3 seconds</span></footer>
+  </div>
+  <script src="/web/app.js"></script>
+</body>
+</html>

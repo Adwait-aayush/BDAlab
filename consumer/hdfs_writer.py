@@ -67,6 +67,48 @@ class HDFSWriter:
             logger.warning(f"Could not reach WebHDFS to MKDIRS /{hdfs_dir} ({e}). Local directory created.")
             return False
 
+    def delete_file(self, hdfs_path: str) -> bool:
+        """Delete one HDFS file and its local mirror counterpart."""
+        hdfs_path = hdfs_path.strip("/")
+        local_path = os.path.join(self.local_mirror_dir, hdfs_path)
+        try:
+                if os.path.exists(local_path):
+                    os.remove(local_path)
+        except OSError as exc:
+                logger.warning("Could not remove local mirror %s: %s", hdfs_path, exc)
+
+        url = f"{self.webhdfs_url}/{hdfs_path}?op=DELETE&recursive=false&user.name={self.hdfs_user}"
+        try:
+                response = self.session.delete(url, timeout=5)
+                return response.status_code in (200, 404)
+        except requests.RequestException as exc:
+                logger.warning("Could not delete HDFS file /%s: %s", hdfs_path, exc)
+                return False
+
+    def remove_legacy_zone_files(self) -> None:
+        """Keep one canonical file per data zone and remove date-suffixed files."""
+        zones = {
+                "movie-sentiment/raw": "reviews.jsonl",
+                "movie-sentiment/processed": "scored.jsonl",
+                "movie-sentiment/metrics": "summary.json",
+        }
+        for zone, canonical_name in zones.items():
+                local_zone = os.path.join(self.local_mirror_dir, zone)
+                if os.path.isdir(local_zone):
+                    for name in os.listdir(local_zone):
+                        if name != canonical_name:
+                            self.delete_file(f"{zone}/{name}")
+                url = f"{self.webhdfs_url}/{zone}?op=LISTSTATUS&user.name={self.hdfs_user}"
+                try:
+                    response = self.session.get(url, timeout=5)
+                    response.raise_for_status()
+                    entries = response.json().get("FileStatuses", {}).get("FileStatus", [])
+                    for entry in entries:
+                        name = entry.get("pathSuffix")
+                        if name and name != canonical_name and entry.get("type") == "FILE":
+                            self.delete_file(f"{zone}/{name}")
+                except (requests.RequestException, ValueError, TypeError):
+                    logger.info("Could not inspect legacy files in /%s", zone)
     def write_jsonl_records(self, hdfs_path: str, records: List[Dict[str, Any]], overwrite: bool = False) -> bool:
         """
         Writes a list of JSON records to an HDFS file (in JSONL format).
@@ -117,6 +159,36 @@ class HDFSWriter:
         except Exception as e:
             logger.warning(f"WebHDFS write failed for /{hdfs_path} ({e}). Persisted in local mirror.")
             return False
+
+    def append_jsonl_records(self, hdfs_path: str, records: List[Dict[str, Any]]) -> bool:
+        """Append JSONL records to one canonical HDFS file."""
+        if not records:
+            return True
+        hdfs_path = hdfs_path.strip("/")
+        payload = ("\n".join(json.dumps(record) for record in records) + "\n").encode("utf-8")
+        local_path = os.path.join(self.local_mirror_dir, hdfs_path)
+        os.makedirs(os.path.dirname(local_path), exist_ok=True)
+        with open(local_path, "ab") as handle:
+            handle.write(payload)
+
+        url = f"{self.webhdfs_url}/{hdfs_path}?op=APPEND&user.name={self.hdfs_user}"
+        try:
+            response = self.session.post(url, allow_redirects=False, timeout=5)
+            redirect_method = "post"
+            if response.status_code == 404:
+                create_url = f"{self.webhdfs_url}/{hdfs_path}?op=CREATE&overwrite=true&user.name={self.hdfs_user}"
+                response = self.session.put(create_url, allow_redirects=False, timeout=5)
+                redirect_method = "put"
+            if response.status_code == 307 and response.headers.get("Location"):
+                request = self.session.put if redirect_method == "put" else self.session.post
+                response = request(response.headers["Location"], data=payload,
+                                   headers={"Content-Type": "application/octet-stream"}, timeout=10)
+            if response.status_code in (200, 201):
+                return True
+            logger.warning("WebHDFS append returned %s for /%s", response.status_code, hdfs_path)
+        except requests.RequestException as exc:
+            logger.warning("WebHDFS append failed for /%s: %s", hdfs_path, exc)
+        return False
 
     def write_json(self, hdfs_path: str, data: Any, overwrite: bool = True) -> bool:
         """

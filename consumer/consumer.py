@@ -119,6 +119,7 @@ class MovieSentimentPipelineConsumer:
         self.hdfs_writer.ensure_directory("movie-sentiment/raw")
         self.hdfs_writer.ensure_directory("movie-sentiment/processed")
         self.hdfs_writer.ensure_directory("movie-sentiment/metrics")
+        self.hdfs_writer.remove_legacy_zone_files()
 
         # 3. Initialize Metrics Manager
         metrics_file = os.getenv("METRICS_DATA_PATH", "artifacts/live_metrics.json")
@@ -169,19 +170,18 @@ class MovieSentimentPipelineConsumer:
         if not self.raw_buffer and not self.processed_buffer:
             return
 
-        date_tag = datetime.utcnow().strftime("%Y%m%d")
-        raw_path = f"movie-sentiment/raw/reviews_{date_tag}.jsonl"
-        processed_path = f"movie-sentiment/processed/scored_{date_tag}.jsonl"
+        raw_path = "movie-sentiment/raw/reviews.jsonl"
+        processed_path = "movie-sentiment/processed/scored.jsonl"
         metrics_path = "movie-sentiment/metrics/summary.json"
 
         # Write to HDFS
         if self.raw_buffer:
-            self.hdfs_writer.write_jsonl_records(raw_path, self.raw_buffer, overwrite=False)
+            self.hdfs_writer.append_jsonl_records(raw_path, self.raw_buffer)
             self.raw_buffer.clear()
 
         if self.processed_buffer:
             # 1. Write processed data
-            self.hdfs_writer.write_jsonl_records(processed_path, self.processed_buffer, overwrite=False)
+            self.hdfs_writer.append_jsonl_records(processed_path, self.processed_buffer)
             # 2. Update aggregations
             self.metrics_mgr.update_with_records(self.processed_buffer)
             # 3. Write latest metrics summary to HDFS

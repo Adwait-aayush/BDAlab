@@ -171,7 +171,7 @@ services:
     command: ["python", "producer/producer.py"]
 
   # ==============================================================
-  # 7. Interactive Streamlit Analytics Dashboard
+  # 7. Lightweight browser analytics dashboard (stdlib HTTP server)
   # ==============================================================
   dashboard:
     build: .
@@ -189,4 +189,4 @@ services:
     volumes:
       - app-artifacts:/workspace/artifacts
     restart: unless-stopped
-    command: ["streamlit", "run", "app/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+    command: ["python", "app/web_server.py"]

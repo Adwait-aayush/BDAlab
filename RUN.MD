@@ -25,7 +25,7 @@ docker compose up -d
 > 3. Executes `init-setup`: creates Kafka topics & trains the **TF-IDF + Logistic Regression** model.
 > 4. Starts the **Consumer**: ingests streams, predicts sentiment, and writes to HDFS.
 > 5. Starts the **Producer**: continuously streams realistic movie review records.
-> 6. Launches the **Streamlit Analytics Dashboard**.
+> 6. Launches the **Sentinel Browser Control Room** (vanilla HTML/CSS/JS served by Python).
 
 ---
 
@@ -33,17 +33,16 @@ docker compose up -d
 
 > ⚠️ **Important URL Tip for Windows**: Always use `http://127.0.0.1` rather than `localhost` to avoid Windows IPv6 resolution drops (`ERR_EMPTY_RESPONSE`).
 
-### 1. The Interactive Dashboard
+### 1. The Interactive Browser Dashboard
 Open your web browser and navigate to:
 👉 **[http://127.0.0.1:8501](http://127.0.0.1:8501)**
 
 **What to show the evaluator:**
 - **Live KPIs**: Total reviews processed, positive %, negative %, and average sentiment score updating live.
 - **Sentiment Timeline**: Real-time line chart showing sentiment trends as reviews are ingested.
-- **Per-Movie Breakdown Tab**: Select movies like *Inception*, *The Godfather*, or *Interstellar* to inspect specific metrics.
-- **Live Scored Reviews Tab**: Scrollable stream of incoming reviews with model predictions and probabilities.
-- **ML Model Metrics Tab**: Displays model accuracy (~88%), confusion matrix, precision, recall, and F1-score.
-- **Interactive Review Sandbox**: Type a custom review on the spot (e.g., *"An absolute cinematic masterpiece with unforgettable music!"*) and click **Classify Sentiment** to demonstrate live real-time inference.
+- **Animated pipeline**: Follow particles from Kafka through the ML predictor to HDFS.
+- **HDFS zones and write log**: Inspect raw, processed, and metrics landing zones with WebHDFS/local-mirror status.
+- **Custom Predictor**: Type a review on the spot and send it through the production `SentimentPredictor` without writing demo data.
 
 ### 2. The Hadoop HDFS Cluster (Big Data Proof)
 Open another browser tab:
@@ -117,4 +116,4 @@ docker compose down
 
 ## 🎯 30-Second Summary for Evaluators
 
-> *"In this project, we built an end-to-end Big Data streaming and analytics pipeline. Incoming movie reviews are published as JSON events to **Apache Kafka (KRaft mode)**. A streaming consumer processes each review through an NLP pipeline using **TF-IDF vectorization and Logistic Regression** to score sentiment. Both raw reviews and scored predictions are persisted in **Hadoop HDFS** for long-term Data Lake storage. Finally, movie statistics are aggregated dynamically and presented on an interactive **Streamlit dashboard**."*
+> *"In this project, we built an end-to-end Big Data streaming and analytics pipeline. Incoming movie reviews are published as JSON events to **Apache Kafka (KRaft mode)**. A streaming consumer processes each review through an NLP pipeline using **TF-IDF vectorization and Logistic Regression** to score sentiment. Both raw reviews and scored predictions are persisted in **Hadoop HDFS** for long-term Data Lake storage. Finally, movie statistics are aggregated dynamically and presented in a lightweight browser control room."*

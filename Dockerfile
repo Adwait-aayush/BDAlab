@@ -20,6 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy source code, configurations, and default fixtures
 COPY app/ ./app/
+COPY web/ ./web/
 COPY model/ ./model/
 COPY producer/ ./producer/
 COPY consumer/ ./consumer/
@@ -28,7 +29,7 @@ COPY data/ ./data/
 COPY artifacts/ ./artifacts/
 COPY .env.example ./.env.example
 
-# Default port exposure for Streamlit
+# Lightweight control-room web server
 EXPOSE 8501
 
-CMD ["streamlit", "run", "app/dashboard.py", "--server.port=8501", "--server.address=0.0.0.0"]
+CMD ["python", "app/web_server.py"]

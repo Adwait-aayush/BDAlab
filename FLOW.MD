@@ -27,7 +27,7 @@ flowchart LR
     subgraph VISUALIZATION["4. Serving & Analytics"]
         C -->|Publish Results| KP[(⚡ Kafka Topic: movie-sentiment-results)]
         C -->|Real-Time Metric Sync| ART[📊 Live Metrics Store]
-        ART --> D[🖥️ Streamlit Dashboard<br/>http://127.0.0.1:8501]
+        ART --> D[🖥️ Browser Control Room<br/>http://127.0.0.1:8501]
     end
 
     style INGESTION fill:#1e293b,stroke:#38bdf8,stroke-width:2px,color:#fff
@@ -72,13 +72,14 @@ Use these real-world analogies when explaining the project to your professor or 
 
 ---
 
-### 🖥️ D. Streamlit Analytics Dashboard (The Live Control Room)
-* **What it is**: An interactive, real-time web dashboard running on port `8501`.
+### 🖥️ D. Browser Control Room (The Live Control Room)
+* **What it is**: A dependency-light HTML/CSS/vanilla JavaScript dashboard served by `app/web_server.py` on port `8501`.
 * **Features to show off**:
   * Real-time KPI counter (Total reviews, % positive, % negative).
   * Live timeline plot of sentiment drift over time.
-  * Individual movie drill-down (Inception, The Godfather, Interstellar, etc.).
-  * Interactive live sandbox where the examiner can type custom reviews and test predictions on the fly!
+  * HDFS zone cards and recent persistence writes with WebHDFS/local-mirror status.
+  * Interactive predictor that calls the same `SentimentPredictor` used by the consumer.
+  * Animated Kafka → ML → HDFS event path for presentations.
 
 ---
 
@@ -89,10 +90,10 @@ Use these real-world analogies when explaining the project to your professor or 
 3. **Step 3 — Streaming Consumption**: The `consumer` container receives the message immediately from the Kafka partition.
 4. **Step 4 — NLP & ML Scoring**: The text is cleaned, vectorized with TF-IDF, and evaluated with Logistic Regression.
 5. **Step 5 — Dual Persistence (Data Lake)**:
-   * **Raw Storage**: Review appended to HDFS at `/movie-sentiment/raw/reviews_YYYYMMDD.jsonl`.
-   * **Processed Storage**: Prediction appended to HDFS at `/movie-sentiment/processed/scored_YYYYMMDD.jsonl`.
+   * **Raw Storage**: Review appended to HDFS at `/movie-sentiment/raw/reviews.jsonl`.
+   * **Processed Storage**: Prediction appended to HDFS at `/movie-sentiment/processed/scored.jsonl`.
    * **Local Resilient Mirror**: Automatically mirrors data locally to prevent loss during network disconnects.
-6. **Step 6 — Aggregation & Visualization**: Real-time rolling metrics are computed (movie averages, positive counts) and pushed to `/movie-sentiment/metrics/summary.json` and read by the **Streamlit Dashboard**.
+6. **Step 6 — Aggregation & Visualization**: Real-time rolling metrics are computed (movie averages, positive counts) and pushed to `/movie-sentiment/metrics/summary.json` and `artifacts/live_metrics.json`, then read by the **Browser Control Room** API.
 
 ---
 
@@ -146,10 +147,10 @@ Follow this sequence during your project review:
    ```
    *Point out: "The consumer is pulling messages from Kafka in real-time, executing TF-IDF inference, and appending records to HDFS."*
 
-4. **Show Streamlit Dashboard**:
+4. **Show Browser Control Room**:
    * Open: **[http://127.0.0.1:8501](http://127.0.0.1:8501)**
    * Show the KPI metrics incrementing live.
-   * Go to **Live Review Sandbox**, type:
+   * Go to **Custom Sentiment Predictor**, type:
      > *"An absolute masterpiece with incredible acting and direction!"*
    * Click **Classify Sentiment** &rarr; show **POSITIVE (95%+ confidence)**.
    * Type:
