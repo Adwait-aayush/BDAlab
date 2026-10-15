@@ -251,10 +251,13 @@
   }
 
   $("refresh-now").addEventListener("click", refresh);
+  const flowMap = document.querySelector(".system-flow");
+  let lastFlowNode = null;
   document.querySelectorAll("[data-target].intro-action, [data-target].flow-node").forEach((action) => {
     action.addEventListener("click", () => {
       const target = document.getElementById(action.dataset.target);
       if (!target) return;
+      if (action.classList.contains("flow-node")) lastFlowNode = action;
       document.getElementById("intro-view").style.display = "none";
       document.querySelectorAll(".detail-view").forEach((view) => {
         view.classList.remove("active");
@@ -273,6 +276,14 @@
       });
       document.getElementById("intro-view").style.display = "block";
       window.scrollTo({ top: 0, behavior: "smooth" });
+      requestAnimationFrame(() => {
+        if (lastFlowNode) {
+          lastFlowNode.focus();
+        } else if (flowMap) {
+          flowMap.tabIndex = -1;
+          flowMap.focus();
+        }
+      });
     });
   });
   $("review-input").addEventListener("input", (event) => { $("char-count").textContent = event.target.value.length.toLocaleString(); });
